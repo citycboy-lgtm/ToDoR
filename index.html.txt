@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do List App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        .task-list-container::-webkit-scrollbar, .rewards-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .task-list-container::-webkit-scrollbar-track, .rewards-container::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+        .task-list-container::-webkit-scrollbar-thumb, .rewards-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        .task-list-container::-webkit-scrollbar-thumb:hover, .rewards-container::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .listening {
+            color: #ef4444;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .star-rating .star {
+            color: #d1d5db; /* gray-300 */
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .star-rating .star.selected,
+        .star-rating:hover .star {
+            color: #f59e0b; /* amber-500 */
+        }
+        .star-rating:hover .star:hover ~ .star {
+            color: #d1d5db; /* gray-300 */
+        }
+        /* Shop specific styles */
+        .shop-bg {
+            background-color: #f0eadd;
+            background-image: linear-gradient(to bottom, #d2b48c, #d2b48c 2px, transparent 2px, transparent 20px),
+                              linear-gradient(to right, #d2b48c, #d2b48c 2px, transparent 2px, transparent 20px);
+            background-size: 20px 20px;
+        }
+        .shelf {
+            background: #854d0e; /* amber-800 */
+            height: 20px;
+            border-radius: 5px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3), 0 4px 6px -2px rgba(0,0,0,0.2);
+            position: relative;
+        }
+        .shelf::before {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 10px;
+            right: 10px;
+            height: 5px;
+            background: #a16207; /* amber-700 */
+            border-radius: 0 0 5px 5px;
+        }
+        .reward-item {
+            font-family: 'Gaegu', cursive;
+            transition: transform 0.2s ease-in-out;
+        }
+        .reward-item:hover {
+            transform: translateY(-10px) scale(1.05);
+        }
+        .drag-handle {
+            cursor: grab;
+        }
+        .sortable-ghost {
+            opacity: 0.4;
+            background: #c7d2fe;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <!-- Main App View -->
+    <div id="main-app-view">
+        <div class="container mx-auto p-4 sm:p-6 md:p-8">
+            <header class="text-center mb-8">
+                <h1 class="text-4xl sm:text-5xl font-extrabold text-gray-900 mb-2">My To-Do Lists</h1>
+                <p class="text-gray-600 text-base sm:text-lg">Complete tasks, earn stars, and claim your rewards!</p>
+                
+                <div class="mt-6 flex justify-center items-center flex-wrap gap-4">
+                    <div class="bg-white px-4 py-2 rounded-lg shadow-md">
+                        <span class="font-bold text-lg text-amber-500">Total Stars:</span>
+                        <span id="total-stars-display" class="font-bold text-xl text-gray-800">0 ✨</span>
+                    </div>
+                    <button id="save-progress-btn" class="px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-md">
+                        Save Progress
+                    </button>
+                    <button id="open-shop-btn" class="px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors shadow-md">
+                        Rewards Shop
+                    </button>
+                    <button id="set-global-reminder-btn" class="px-6 py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-md">
+                        App Reminder
+                    </button>
+                </div>
+                <p id="global-reminder-status" class="text-sm text-gray-600 mt-4">App reminder is off.</p>
+                <p id="userIdDisplay" class="text-xs text-gray-500 mt-6 break-all px-2">Authenticating...</p>
+            </header>
+
+            <main class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                 <!-- Daily Tasks Column with Sections -->
+                <div class="bg-white rounded-xl shadow-lg p-4 sm:p-6 flex flex-col space-y-4">
+                    <div class="flex justify-between items-center border-b pb-2">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h2 class="text-2xl font-bold text-indigo-800">Daily</h2>
+                            <span id="daily-stars-total" class="text-base font-bold text-amber-500 bg-amber-100 px-3 py-1 rounded-full" title="Stars Earned Today">0 ✨</span>
+                            <span id="daily-duration-total" class="text-base font-bold text-sky-500 bg-sky-100 px-3 py-1 rounded-full" title="Total Task Duration Today">0 min 🕒</span>
+                            <span id="daily-star-cap" class="text-base font-bold text-red-500 bg-red-100 px-3 py-1 rounded-full" title="Daily Star Cap">0 ✨ Cap</span>
+                        </div>
+                        <button id="manage-standard-tasks-btn" class="text-sm text-indigo-600 hover:text-indigo-800 font-semibold whitespace-nowrap">Manage Daily</button>
+                    </div>
+                    
+                    <!-- Morning Section -->
+                    <div class="bg-yellow-100 rounded-lg p-3">
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="font-bold text-yellow-800">Morning</h3>
+                            <span id="morning-stars-total" class="text-sm font-bold text-yellow-800 bg-yellow-200 px-2 py-0.5 rounded-full">0 ✨</span>
+                        </div>
+                        <div class="min-h-[100px] task-list-container"><ul id="morning-tasks-list" class="space-y-2 daily-task-list"></ul></div>
+                    </div>
+
+                    <!-- Day Section -->
+                    <div class="bg-blue-100 rounded-lg p-3">
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="font-bold text-blue-800">Day</h3>
+                            <span id="day-stars-total" class="text-sm font-bold text-blue-800 bg-blue-200 px-2 py-0.5 rounded-full">0 ✨</span>
+                        </div>
+                        <div class="min-h-[100px] task-list-container"><ul id="day-tasks-list" class="space-y-2 daily-task-list"></ul></div>
+                    </div>
+
+                    <!-- Evening Section -->
+                    <div class="bg-indigo-100 rounded-lg p-3">
+                         <div class="flex justify-between items-center mb-2">
+                            <h3 class="font-bold text-indigo-800">Evening</h3>
+                            <span id="evening-stars-total" class="text-sm font-bold text-indigo-800 bg-indigo-200 px-2 py-0.5 rounded-full">0 ✨</span>
+                        </div>
+                        <div class="min-h-[100px] task-list-container"><ul id="evening-tasks-list" class="space-y-2 daily-task-list"></ul></div>
+                    </div>
+
+                    <div class="mt-auto pt-4">
+                        <div class="flex mb-2"><input type="text" id="daily-task-input" placeholder="Add or dictate..." class="flex-grow p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"/><button id="dictate-daily-task" class="dictate-btn p-3 border-y border-gray-300 text-gray-600 hover:bg-gray-100" title="Dictate Task"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg></button></div>
+                        <div class="flex"><select id="daily-time-of-day-select" class="p-3 border border-gray-300 rounded-l-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"><option value="morning">Morning</option><option value="day" selected>Day</option><option value="evening">Evening</option></select><input type="number" id="daily-duration-input" placeholder="min" class="w-20 p-3 border-y border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"><button id="add-daily-task" class="flex-grow px-4 py-3 bg-indigo-600 text-white font-bold rounded-r-lg hover:bg-indigo-700">Add</button></div>
+                    </div>
+                </div>
+                <!-- Other Columns -->
+                <div class="bg-white rounded-xl shadow-lg p-4 sm:p-6 flex flex-col">
+                    <div class="flex justify-between items-center border-b pb-2 mb-4"><h2 class="text-2xl font-bold text-indigo-800">Weekly</h2><button id="manage-standard-weekly-tasks-btn" class="text-sm text-indigo-600 hover:text-indigo-800 font-semibold whitespace-nowrap">Manage Weekly</button></div>
+                    <div class="flex-grow overflow-y-auto min-h-[300px] task-list-container"><ul id="weekly-tasks-list" class="space-y-3"></ul></div>
+                    <div class="mt-6 flex"><input type="text" id="weekly-task-input" placeholder="Add a task..." class="flex-grow p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"/><input type="number" id="weekly-duration-input" placeholder="min" class="w-20 p-3 border-y border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"><button id="add-weekly-task" class="px-4 py-3 bg-indigo-600 text-white font-bold rounded-r-lg hover:bg-indigo-700">Add</button></div>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg p-4 sm:p-6 flex flex-col">
+                    <h2 class="text-2xl font-bold mb-4 text-indigo-800 border-b pb-2">Monthly</h2>
+                    <div class="flex-grow overflow-y-auto min-h-[300px] task-list-container"><ul id="monthly-tasks-list" class="space-y-3"></ul></div>
+                    <div class="mt-6 flex"><input type="text" id="monthly-task-input" placeholder="Add a task..." class="flex-grow p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"/><input type="number" id="monthly-duration-input" placeholder="min" class="w-20 p-3 border-y border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"><button id="add-monthly-task" class="px-4 py-3 bg-indigo-600 text-white font-bold rounded-r-lg hover:bg-indigo-700">Add</button></div>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg p-4 sm:p-6 flex flex-col">
+                    <h2 class="text-2xl font-bold mb-4 text-indigo-800 border-b pb-2">Yearly</h2>
+                    <div class="flex-grow overflow-y-auto min-h-[300px] task-list-container"><ul id="yearly-tasks-list" class="space-y-3"></ul></div>
+                    <div class="mt-6 flex"><input type="text" id="yearly-task-input" placeholder="Add a task..." class="flex-grow p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"/><input type="number" id="yearly-duration-input" placeholder="min" class="w-20 p-3 border-y border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"><button id="add-yearly-task" class="px-4 py-3 bg-indigo-600 text-white font-bold rounded-r-lg hover:bg-indigo-700">Add</button></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Shop View -->
+    <div id="shop-view" class="hidden">
+        <div class="min-h-screen shop-bg p-4 sm:p-8 relative">
+            <div class="flex justify-between items-center bg-white/70 backdrop-blur-sm p-4 rounded-xl shadow-lg sticky top-4 z-30">
+                <button id="back-to-tasks-btn" class="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors">Save & Exit</button>
+                <h2 class="text-3xl font-bold text-green-800" style="font-family: 'Gaegu', cursive;">Ye Olde Reward Shoppe</h2>
+                <div class="bg-amber-400 px-4 py-2 rounded-lg shadow-inner"><span class="font-bold text-lg text-white">Stars:</span><span id="shop-stars-display" class="font-bold text-xl text-white">0 ✨</span></div>
+            </div>
+            <div class="relative mt-8">
+                <div class="absolute bottom-0 left-0 right-0 h-24 bg-yellow-900/80 backdrop-blur-sm rounded-t-2xl shadow-2xl z-20"></div>
+                <div id="rewards-on-shelves" class="relative grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-y-20 gap-x-6 pb-48 z-0"></div>
+            </div>
+            <div class="relative bg-white/70 backdrop-blur-sm p-6 rounded-xl shadow-lg mt-8 z-20">
+                <h4 class="text-xl font-bold text-gray-700 mb-4">Add a New Reward to the Shelves</h4>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <select id="reward-icon-select" class="p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-green-500 text-2xl"></select>
+                    <input type="text" id="reward-name-input" placeholder="Reward Name" class="flex-grow p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"/>
+                    <input type="number" id="reward-cost-input" placeholder="Star Cost" class="w-full sm:w-28 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"/>
+                    <button id="add-reward-btn" class="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">Add Reward</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4 hidden"><div class="bg-white rounded-lg p-6 shadow-xl max-w-sm w-full text-center"><h3 id="modal-title" class="text-xl font-bold text-indigo-800 mb-2"></h3><div id="modal-body"></div><div id="modal-buttons" class="mt-4"></div></div></div>
+    <div id="check-in-modal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 p-4 hidden"><div class="bg-white rounded-lg p-8 shadow-xl max-w-sm w-full text-center"><h3 class="text-2xl font-bold text-gray-800 mb-4">Daily Check-in</h3><p class="text-gray-600 mb-6">How was your previous day?</p><div class="flex justify-around"><button id="smiley-btn" class="text-5xl transform hover:scale-125 transition-transform">😊</button><button id="indifferent-btn" class="text-5xl transform hover:scale-125 transition-transform">😐</button><button id="sad-btn" class="text-5xl transform hover:scale-125 transition-transform">😔</button></div></div></div>
+    <div id="standard-tasks-modal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4 hidden"><div class="bg-white rounded-lg p-6 shadow-xl max-w-md w-full"><div class="flex justify-between items-center mb-4"><h3 class="text-xl font-bold text-gray-800">Manage Standard Daily Tasks</h3><button id="standard-tasks-modal-close-btn" class="text-gray-500 hover:text-gray-800 text-2xl font-bold">&times;</button></div><p class="text-sm text-gray-600 mb-4">These tasks appear on your daily list each morning. Drag to reorder.</p><div class="mb-4"><ul id="standard-tasks-list" class="space-y-2 max-h-60 overflow-y-auto task-list-container p-2 bg-gray-50 rounded"></ul></div><div class="flex flex-wrap gap-2"><select id="standard-task-time-of-day-select" class="p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"><option value="morning">Morning</option><option value="day" selected>Day</option><option value="evening">Evening</option></select><input type="text" id="standard-task-input" placeholder="New task..." class="flex-grow p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"/><input type="number" id="standard-task-duration-input" placeholder="min" class="w-20 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"><input type="number" id="standard-task-rating-input" min="1" max="5" placeholder="✨" class="w-20 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" /><button id="add-standard-task-btn" class="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">Add</button></div></div></div>
+    <div id="standard-weekly-tasks-modal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4 hidden"><div class="bg-white rounded-lg p-6 shadow-xl max-w-lg w-full"><div class="flex justify-between items-center mb-4"><h3 class="text-xl font-bold text-gray-800">Manage Standard Weekly Tasks</h3><button id="standard-weekly-tasks-modal-close-btn" class="text-gray-500 hover:text-gray-800 text-2xl font-bold">&times;</button></div><p class="text-sm text-gray-600 mb-4">These tasks will be added to your daily list on the selected day each week.</p><div class="mb-4"><ul id="standard-weekly-tasks-list" class="space-y-2 max-h-60 overflow-y-auto task-list-container p-2 bg-gray-50 rounded"></ul></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-2"><input type="text" id="standard-weekly-task-input" placeholder="New weekly task..." class="sm:col-span-2 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"/><select id="standard-weekly-day-select" class="p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select><input type="time" id="standard-weekly-time-input" class="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"/><input type="number" id="standard-weekly-duration-input" placeholder="Duration (min)" class="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"/><input type="number" id="standard-weekly-rating-input" min="1" max="5" placeholder="Stars ✨" class="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"/><button id="add-standard-weekly-task-btn" class="sm:col-span-2 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">Add Weekly Task</button></div></div></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, collection, onSnapshot, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, serverTimestamp, increment, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- GLOBAL STATE AND CONFIG ---
+        let db, auth, userId, isAuthReady = false, userSettings = {}, currentRewards = [];
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const TASK_TYPES = ['weekly', 'monthly', 'yearly'];
+        const DAILY_SECTIONS = ['morning', 'day', 'evening'];
+        const REWARD_ICONS = ['🎁', '🎟️', '🍕', '🎮', '📚', '🎬', '🍦', '🎉', '💡', '🏆', '🍔', '🌮', '🍩', '🍿', '🎈', '🎨', '🎤', '🎸', '⚽', '🏀'];
+        const GLOBAL_REMINDER_KEY = `todoAppGlobalReminder_${appId}`;
+
+        // --- DOM ELEMENT REFERENCES ---
+        const mainAppView = document.getElementById('main-app-view');
+        const shopView = document.getElementById('shop-view');
+        const taskLists = {}, taskInputs = {}, addButtons = {}, durationInputs = {};
+        TASK_TYPES.forEach(type => {
+            taskLists[type] = document.getElementById(`${type}-tasks-list`);
+            taskInputs[type] = document.getElementById(`${type}-task-input`);
+            addButtons[type] = document.getElementById(`add-${type}-task`);
+            durationInputs[type] = document.getElementById(`${type}-duration-input`);
+        });
+        const dailyTaskLists = { morning: document.getElementById('morning-tasks-list'), day: document.getElementById('day-tasks-list'), evening: document.getElementById('evening-tasks-list') };
+        const dailyTaskInput = document.getElementById('daily-task-input'), addDailyTaskBtn = document.getElementById('add-daily-task'), dailyTimeOfDaySelect = document.getElementById('daily-time-of-day-select'), dailyDurationInput = document.getElementById('daily-duration-input');
+        const dailyStarsTotal = document.getElementById('daily-stars-total'), dailyDurationTotal = document.getElementById('daily-duration-total'), dailyStarCap = document.getElementById('daily-star-cap');
+        const morningStarsTotal = document.getElementById('morning-stars-total'), dayStarsTotal = document.getElementById('day-stars-total'), eveningStarsTotal = document.getElementById('evening-stars-total');
+        const standardTasksModal = document.getElementById('standard-tasks-modal'), manageStandardTasksBtn = document.getElementById('manage-standard-tasks-btn'), standardTasksModalCloseBtn = document.getElementById('standard-tasks-modal-close-btn'), standardTasksList = document.getElementById('standard-tasks-list'), standardTaskInput = document.getElementById('standard-task-input'), addStandardTaskBtn = document.getElementById('add-standard-task-btn'), standardTaskRatingInput = document.getElementById('standard-task-rating-input'), standardTaskTimeOfDaySelect = document.getElementById('standard-task-time-of-day-select'), standardTaskDurationInput = document.getElementById('standard-task-duration-input');
+        const standardWeeklyTasksModal = document.getElementById('standard-weekly-tasks-modal'), manageStandardWeeklyTasksBtn = document.getElementById('manage-standard-weekly-tasks-btn'), standardWeeklyTasksModalCloseBtn = document.getElementById('standard-weekly-tasks-modal-close-btn'), standardWeeklyTasksList = document.getElementById('standard-weekly-tasks-list'), standardWeeklyTaskInput = document.getElementById('standard-weekly-task-input'), addStandardWeeklyTaskBtn = document.getElementById('add-standard-weekly-task-btn'), standardWeeklyRatingInput = document.getElementById('standard-weekly-rating-input'), standardWeeklyDaySelect = document.getElementById('standard-weekly-day-select'), standardWeeklyTimeInput = document.getElementById('standard-weekly-time-input'), standardWeeklyDurationInput = document.getElementById('standard-weekly-duration-input');
+        const totalStarsDisplay = document.getElementById('total-stars-display');
+        const openShopBtn = document.getElementById('open-shop-btn');
+        const backToTasksBtn = document.getElementById('back-to-tasks-btn');
+        const setGlobalReminderBtn = document.getElementById('set-global-reminder-btn');
+        const globalReminderStatus = document.getElementById('global-reminder-status');
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+        const modalButtons = document.getElementById('modal-buttons');
+        const addRewardBtn = document.getElementById('add-reward-btn');
+        const rewardNameInput = document.getElementById('reward-name-input');
+        const rewardCostInput = document.getElementById('reward-cost-input');
+        const rewardIconSelect = document.getElementById('reward-icon-select');
+        const saveProgressBtn = document.getElementById('save-progress-btn');
+        const checkInModal = document.getElementById('check-in-modal');
+
+        // --- VIEW & MODAL HELPERS ---
+        function showModal(title, bodyContent, buttonsConfig) {
+            modalTitle.textContent = title;
+            modalBody.innerHTML = bodyContent;
+            modalButtons.innerHTML = '';
+            buttonsConfig.forEach(btn => {
+                const buttonEl = document.createElement('button');
+                buttonEl.textContent = btn.text;
+                buttonEl.className = btn.class;
+                buttonEl.addEventListener('click', () => {
+                    if(btn.action) btn.action();
+                    modal.classList.add('hidden');
+                });
+                modalButtons.appendChild(buttonEl);
+            });
+            modal.classList.remove('hidden');
+        }
+        window.showModal = showModal;
+
+        // --- FIREBASE & AUTH ---
+        async function setupFirebase() {
+            if (!firebaseConfig) return;
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
+                        if (!isAuthReady) { isAuthReady = true; initializeAppData(); }
+                    } else {
+                        isAuthReady = false;
+                    }
+                });
+                if (initialAuthToken) { await signInWithCustomToken(auth, initialAuthToken); } 
+                else { await signInAnonymously(auth); }
+            } catch (error) { console.error("Firebase setup error:", error); }
+        }
+
+        // --- DATA & UI INITIALIZATION ---
+        async function initializeAppData() {
+            if (!isAuthReady || !userId) return;
+            populateRewardIcons();
+            await checkAndCreateUserSettings();
+            await handleDailyResetsAndMigrations();
+            listenToTasks('daily');
+            TASK_TYPES.forEach(type => listenToTasks(type));
+            listenToStandardTasks();
+            listenToStandardWeeklyTasks();
+            listenToUserSettings();
+            listenToRewards();
+            initializeSortableLists();
+            initializeReminderChecks();
+            updateGlobalReminderStatus();
+        }
+        
+        async function checkAndCreateUserSettings() {
+            const settingsRef = doc(db, `/artifacts/${appId}/users/${userId}/settings/main`);
+            const settingsSnap = await getDoc(settingsRef);
+            if (!settingsSnap.exists()) {
+                await setDoc(settingsRef, { 
+                    totalStars: 0, 
+                    lastStandardTaskReset: "",
+                    starCap: 0,
+                    lastCheckInDate: "",
+                    dailyStarsEarned: 0,
+                    yesterdaysStars: 0
+                });
+            }
+        }
+
+        function listenToTasks(type) {
+            const collectionName = `${type}_tasks`;
+            onSnapshot(collection(db, `/artifacts/${appId}/users/${userId}/${collectionName}`), (s) => {
+                const tasks = s.docs.map(d => ({ id: d.id, ...d.data() }));
+                if (type === 'daily') {
+                    renderDailyTasks(tasks);
+                } else {
+                    renderTasks(type, tasks);
+                }
+            }, (e) => console.error(`Error listening to ${type} tasks:`, e));
+        }
+        function listenToStandardTasks() { onSnapshot(collection(db, `/artifacts/${appId}/users/${userId}/standard_daily_tasks`), (s) => renderStandardTasks(s.docs.map(d => ({ id: d.id, ...d.data() })))); }
+        function listenToStandardWeeklyTasks() { onSnapshot(collection(db, `/artifacts/${appId}/users/${userId}/standard_weekly_tasks`), (s) => renderStandardWeeklyTasks(s.docs.map(d => ({ id: d.id, ...d.data() })))); }
+        function listenToUserSettings() { 
+            onSnapshot(doc(db, `/artifacts/${appId}/users/${userId}/settings/main`), (doc) => {
+                userSettings = doc.exists() ? doc.data() : { totalStars: 0, starCap: 0, lastCheckInDate: "", dailyStarsEarned: 0, yesterdaysStars: 0 };
+                totalStarsDisplay.textContent = `${userSettings.totalStars || 0} ✨`; 
+                dailyStarCap.textContent = `${userSettings.starCap || 0} ✨ Cap`;
+                dailyStarsTotal.textContent = `${userSettings.dailyStarsEarned || 0} ✨`;
+                checkForMorningCheckIn();
+            }); 
+        }
+        function listenToRewards() { onSnapshot(collection(db, `/artifacts/${appId}/users/${userId}/rewards`), (s) => {
+            currentRewards = s.docs.map(d => ({ id: d.id, ...d.data() }));
+            renderRewardsOnShelves(currentRewards);
+        }); }
+
+        // --- TASK & REWARD RENDERING ---
+        function populateRewardIcons() {
+            REWARD_ICONS.forEach(icon => {
+                const option = document.createElement('option');
+                option.value = icon;
+                option.textContent = icon;
+                rewardIconSelect.appendChild(option);
+            });
+        }
+
+        function renderSingleTask(task, type) {
+            const li = document.createElement('li');
+            li.className = "p-2 bg-white rounded-md shadow-sm";
+            li.dataset.id = task.id; li.dataset.type = type;
+            if (type === 'daily') li.dataset.timeofday = task.timeOfDay;
+
+            const isCompleted = task.isCompleted || false;
+            const rating = task.rating || 1;
+            const duration = task.duration ? `<span class="text-xs text-sky-600 ml-2">🕒 ${task.duration} min</span>` : '';
+            let starsHtml = Array.from({ length: 5 }, (_, i) => `<span class="star ${i < rating ? 'selected' : ''}" data-value="${i + 1}">★</span>`).join('');
+            
+            li.innerHTML = `<div class="flex items-center justify-between">
+                <div class="flex items-center flex-1 min-w-0">
+                    <span class="drag-handle text-gray-400 mr-2">☰</span>
+                    <input type="checkbox" ${isCompleted ? 'checked' : ''} class="task-checkbox w-5 h-5 text-indigo-600 rounded cursor-pointer">
+                    <span class="task-text ml-3 break-words ${isCompleted ? 'line-through text-gray-500' : ''}">${task.text}</span>
+                    ${duration}
+                </div>
+                <div class="task-actions flex items-center">
+                     <button class="edit-task-btn ml-2 text-gray-500 hover:text-gray-700 p-1" title="Edit Task">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pointer-events-none"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                    </button>
+                    <button class="delete-task-btn ml-1 text-red-500 hover:text-red-700 text-sm font-semibold p-1">Delete</button>
+                </div>
+            </div>
+            <div class="star-rating flex justify-end mt-1 pr-1">${starsHtml}</div>`;
+            return li;
+        }
+
+        function renderDailyTasks(tasks) {
+            const sumStars = (filteredTasks) => filteredTasks.reduce((sum, task) => task.isCompleted ? sum + (task.rating || 1) : sum, 0);
+            const sumDuration = (filteredTasks) => filteredTasks.reduce((sum, task) => sum + (task.duration || 0), 0);
+
+            const morningTasks = tasks.filter(t => t.timeOfDay === 'morning').sort((a,b) => (a.order ?? Infinity) - (b.order ?? Infinity));
+            const dayTasks = tasks.filter(t => t.timeOfDay === 'day').sort((a,b) => (a.order ?? Infinity) - (b.order ?? Infinity));
+            const eveningTasks = tasks.filter(t => t.timeOfDay === 'evening').sort((a,b) => (a.order ?? Infinity) - (b.order ?? Infinity));
+
+            morningStarsTotal.textContent = `${sumStars(morningTasks)} ✨`;
+            dayStarsTotal.textContent = `${sumStars(dayTasks)} ✨`;
+            eveningStarsTotal.textContent = `${sumStars(eveningTasks)} ✨`;
+            dailyDurationTotal.textContent = `${sumDuration(tasks)} min 🕒`;
+
+            Object.values(dailyTaskLists).forEach(list => list.innerHTML = '');
+            morningTasks.forEach(task => dailyTaskLists.morning.appendChild(renderSingleTask(task, 'daily')));
+            dayTasks.forEach(task => dailyTaskLists.day.appendChild(renderSingleTask(task, 'daily')));
+            eveningTasks.forEach(task => dailyTaskLists.evening.appendChild(renderSingleTask(task, 'daily')));
+        }
+
+        function renderTasks(type, tasks) {
+            const listElement = taskLists[type];
+            listElement.innerHTML = '';
+            tasks.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity));
+            tasks.forEach(task => {
+                const li = renderSingleTask(task, type);
+                li.className = "p-3 bg-gray-100 rounded-lg";
+                listElement.appendChild(li);
+            });
+        }
+        
+        function renderStandardTasks(tasks) {
+            standardTasksList.innerHTML = '';
+            tasks.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity));
+            tasks.forEach(task => {
+                const li = document.createElement('li');
+                const timeOfDayBadge = { morning: 'bg-yellow-200 text-yellow-800', day: 'bg-blue-200 text-blue-800', evening: 'bg-indigo-200 text-indigo-800'}[task.timeOfDay] || 'bg-gray-200';
+                const durationHtml = task.duration ? `<span class="text-xs text-sky-600 mr-2">🕒 ${task.duration} min</span>` : '';
+                li.className = "flex justify-between items-center p-2 bg-white rounded";
+                li.dataset.id = task.id;
+                li.dataset.taskType = 'daily';
+                li.innerHTML = `<div class="flex items-center flex-grow"><span class="drag-handle text-gray-400 mr-2">☰</span><span class="px-2 py-1 text-xs font-semibold rounded-full ${timeOfDayBadge}">${task.timeOfDay}</span><span class="ml-2">${task.text}</span></div><div class="flex items-center">${durationHtml}<span class="text-amber-500 font-bold mr-2">${task.rating || 1}★</span><button class="edit-standard-task-btn p-1 text-gray-500 hover:text-gray-700"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pointer-events-none"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button><button class="delete-standard-task-btn text-red-500 hover:text-red-700 text-xl">&times;</button></div>`;
+                standardTasksList.appendChild(li);
+            });
+        }
+        function renderStandardWeeklyTasks(tasks) {
+            standardWeeklyTasksList.innerHTML = '';
+            tasks.sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.time.localeCompare(b.time));
+            tasks.forEach(task => {
+                const li = document.createElement('li');
+                const dayName = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][task.dayOfWeek];
+                li.className = "flex justify-between items-center p-2 bg-white rounded";
+                li.dataset.id = task.id;
+                li.dataset.taskType = 'weekly';
+                li.innerHTML = `<div class="flex items-center flex-grow"><span class="font-bold text-indigo-700 mr-2">${dayName} ${task.time}</span><span>${task.text}</span></div><div class="flex items-center"><span class="text-amber-500 font-bold mr-2">${task.rating || 1}★</span><button class="edit-standard-task-btn p-1 text-gray-500 hover:text-gray-700"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pointer-events-none"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button><button class="delete-standard-weekly-task-btn text-red-500 hover:text-red-700 text-xl">&times;</button></div>`;
+                standardWeeklyTasksList.appendChild(li);
+            });
+        }
+        function renderRewardsOnShelves(rewards) {
+            const rewardsOnShelves = document.getElementById('rewards-on-shelves');
+            rewardsOnShelves.innerHTML = '';
+            if (rewards.length === 0) {
+                rewardsOnShelves.innerHTML = `<p class="col-span-full text-center text-xl text-yellow-900 mt-20" style="font-family: 'Gaegu', cursive;">The shelves are empty!</p>`;
+                return;
+            }
+            rewards.forEach((reward, index) => {
+                const item = document.createElement('div');
+                item.className = 'flex flex-col items-center relative reward-item';
+                item.dataset.id = reward.id;
+                const icon = reward.icon || REWARD_ICONS[index % REWARD_ICONS.length];
+                item.innerHTML = `
+                    <div class="text-6xl sm:text-7xl">${icon}</div>
+                    <div class="reward-details bg-white/80 backdrop-blur-sm p-2 rounded-lg text-center mt-2 shadow-md w-full">
+                        <p class="reward-name font-bold text-lg text-gray-800">${reward.name}</p>
+                        <p class="reward-cost text-amber-600 font-bold">${reward.cost} ✨</p>
+                    </div>
+                    <div class="reward-actions mt-2 flex gap-2 justify-center flex-wrap">
+                        <button class="edit-reward-btn px-3 py-1 bg-blue-500 text-white text-sm font-semibold rounded-full hover:bg-blue-600">Edit</button>
+                        <button data-cost="${reward.cost}" class="redeem-reward-btn px-3 py-1 bg-green-500 text-white text-sm font-semibold rounded-full hover:bg-green-600">Redeem</button>
+                        <button class="delete-reward-btn px-3 py-1 bg-red-500 text-white text-sm font-semibold rounded-full hover:bg-red-600">Delete</button>
+                    </div>
+                    <div class="shelf absolute bottom-[-40px] w-full"></div>
+                `;
+                rewardsOnShelves.appendChild(item);
+            });
+        }
+
+        // --- FIRESTORE CRUD ---
+        async function addTask(type, textOverride, options = {}) {
+            const isDaily = type === 'daily';
+            const text = textOverride || (isDaily ? dailyTaskInput.value.trim() : taskInputs[type].value.trim());
+            if (text === '' || !isAuthReady) return;
+            
+            const duration = options.duration !== undefined ? options.duration : (parseInt(isDaily ? dailyDurationInput.value : durationInputs[type].value, 10) || null);
+            const collectionName = `${type}_tasks`;
+            const timeOfDay = isDaily ? (options.timeOfDay || dailyTimeOfDaySelect.value) : null;
+            
+            const taskData = { text, isCompleted: false, createdAt: serverTimestamp(), isStandard: options.isStandard || false, rating: options.rating || 1, order: 999 };
+            if (timeOfDay) taskData.timeOfDay = timeOfDay;
+            if (duration !== null) taskData.duration = duration;
+
+            try { 
+                await addDoc(collection(db, `/artifacts/${appId}/users/${userId}/${collectionName}`), taskData); 
+                if (!textOverride) {
+                    if (isDaily) { dailyTaskInput.value = ''; dailyDurationInput.value = ''; }
+                    else { taskInputs[type].value = ''; durationInputs[type].value = ''; }
+                }
+            } catch (e) { console.error(`Error adding ${type} task:`, e); }
+        }
+        async function addStandardTask() {
+            const text = standardTaskInput.value.trim();
+            if (text === '') return;
+            const rating = parseInt(standardTaskRatingInput.value, 10) || 1;
+            const timeOfDay = standardTaskTimeOfDaySelect.value;
+            const duration = parseInt(standardTaskDurationInput.value, 10) || null;
+            const taskData = { text, rating, timeOfDay, duration };
+            
+            await addDoc(collection(db, `/artifacts/${appId}/users/${userId}/standard_daily_tasks`), taskData);
+            await addTask('daily', text, { isStandard: true, rating, timeOfDay, duration });
+
+            standardTaskInput.value = '';
+            standardTaskRatingInput.value = '';
+            standardTaskDurationInput.value = '';
+        }
+        async function addStandardWeeklyTask() {
+            const text = standardWeeklyTaskInput.value.trim();
+            if (text === '' || !standardWeeklyTimeInput.value) return;
+            const taskData = {
+                text,
+                dayOfWeek: standardWeeklyDaySelect.value,
+                time: standardWeeklyTimeInput.value,
+                duration: parseInt(standardWeeklyDurationInput.value, 10) || null,
+                rating: parseInt(standardWeeklyRatingInput.value, 10) || 1
+            };
+            await addDoc(collection(db, `/artifacts/${appId}/users/${userId}/standard_weekly_tasks`), taskData);
+            standardWeeklyTaskInput.value = '';
+        }
+        async function addReward() {
+            const name = rewardNameInput.value.trim();
+            const cost = parseInt(rewardCostInput.value, 10);
+            const icon = rewardIconSelect.value;
+            if (!name || isNaN(cost) || cost <= 0) { 
+                window.showModal("Invalid Input", "<p>Please enter a valid reward name and a positive star cost.</p>", [{ text: 'OK', class: 'px-4 py-2 bg-blue-600 text-white rounded' }]);
+                return; 
+            }
+            try { 
+                await addDoc(collection(db, `/artifacts/${appId}/users/${userId}/rewards`), { name, cost, icon }); 
+                rewardNameInput.value = ''; 
+                rewardCostInput.value = ''; 
+            } 
+            catch(e) { console.error("Error adding reward", e); }
+        }
+        async function performDelete(collectionName, taskId) { await deleteDoc(doc(db, `/artifacts/${appId}/users/${userId}/${collectionName}/${taskId}`)); }
+        async function toggleTaskCompletion(type, taskId, isCompleted) {
+            const collectionName = `${type}_tasks`;
+            const taskDocRef = doc(db, `/artifacts/${appId}/users/${userId}/${collectionName}/${taskId}`);
+            const taskSnap = await getDoc(taskDocRef);
+            if (!taskSnap.exists()) return;
+
+            const taskData = taskSnap.data();
+            if (isCompleted === taskData.isCompleted) return;
+
+            await updateDoc(taskDocRef, { isCompleted });
+
+            const rating = taskData.rating || 1;
+            const starChange = isCompleted ? rating : -rating;
+            const settingsUpdate = { totalStars: increment(starChange) };
+
+            if (type === 'daily') {
+                settingsUpdate.dailyStarsEarned = increment(starChange);
+            }
+
+            await updateDoc(doc(db, `/artifacts/${appId}/users/${userId}/settings/main`), settingsUpdate);
+            
+            if (type === 'daily' && isCompleted) {
+                const dailyStarsAfter = (userSettings.dailyStarsEarned || 0) + rating;
+                const starCap = userSettings.starCap || 0;
+                const starsBefore = dailyStarsAfter - rating;
+
+                if (starsBefore < starCap && dailyStarsAfter >= starCap) {
+                    window.showModal("Star Goal Reached!", "<p>You've hit your daily star goal! Great job. Remember not to overexert yourself.</p>", [{ text: 'Awesome!', class: 'px-4 py-2 bg-blue-600 text-white rounded' }]);
+                }
+            }
+        }
+        async function updateTaskRating(type, taskId, rating) { await updateDoc(doc(db, `/artifacts/${appId}/users/${userId}/${type}_tasks/${taskId}`), { rating }); }
+        async function updateTaskText(type, taskId, newText) {
+            if (!isAuthReady || !newText) return;
+            const collectionName = `${type}_tasks`;
+            try {
+                await updateDoc(doc(db, `/artifacts/${appId}/users/${userId}/${collectionName}/${taskId}`), { text: newText });
+            } catch (e) {
+                console.error(`Error updating task text:`, e);
+            }
+        }
+        
+        // --- TASK MIGRATION & DAILY RESET ---
+        async function handleDailyResetsAndMigrations() {
+            const now = new Date();
+            const todayStr = now.toISOString().split('T')[0];
+            const settingsRef = doc(db, `/artifacts/${appId}/users/${userId}/settings/main`);
+            const settingsSnap = await getDoc(settingsRef);
+            if (!settingsSnap.exists() || settingsSnap.data().lastStandardTaskReset === todayStr) return;
+
+            // Before resetting, save today's earned stars as yesterday's
+            const currentDailyStars = settingsSnap.data().dailyStarsEarned || 0;
+
+            const q = query(collection(db, `/artifacts/${appId}/users/${userId}/daily_tasks`), where("isStandard", "==", true));
+            const oldStandardTasks = await getDocs(q);
+            await Promise.all(oldStandardTasks.docs.map(d => deleteDoc(d.ref)));
+
+            const dailyMaster = await getDocs(collection(db, `/artifacts/${appId}/users/${userId}/standard_daily_tasks`));
+            await Promise.all(dailyMaster.docs.map(d => addTask('daily', d.data().text, { ...d.data(), isStandard: true })));
+            
+            const todayDay = now.getDay();
+            const weeklyMaster = await getDocs(query(collection(db, `/artifacts/${appId}/users/${userId}/standard_weekly_tasks`), where("dayOfWeek", "==", String(todayDay))));
+            await Promise.all(weeklyMaster.docs.map(d => {
+                const task = d.data();
+                const [hour] = task.time.split(':').map(Number);
+                const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'day' : 'evening';
+                addTask('daily', task.text, { ...task, timeOfDay, isStandard: true });
+            }));
+
+            await updateDoc(settingsRef, { 
+                lastStandardTaskReset: todayStr,
+                yesterdaysStars: currentDailyStars,
+                dailyStarsEarned: 0
+            });
+        }
+
+        // --- CHECK-IN & REMINDERS ---
+        function checkForMorningCheckIn() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const currentHour = new Date().getHours();
+            if (userSettings.lastCheckInDate !== todayStr && currentHour >= 8) {
+                checkInModal.classList.remove('hidden');
+            }
+        }
+        async function handleCheckIn(mood) {
+            const yesterdaysStars = userSettings.yesterdaysStars || 0;
+            let newCap;
+            switch(mood) {
+                case 'happy': newCap = Math.round(yesterdaysStars * 1.10); break;
+                case 'indifferent': newCap = Math.round(yesterdaysStars * 1.02); break;
+                case 'sad': newCap = Math.round(yesterdaysStars * 0.90); break;
+            }
+            await updateDoc(doc(db, `/artifacts/${appId}/users/${userId}/settings/main`), {
+                starCap: newCap,
+                lastCheckInDate: new Date().toISOString().split('T')[0]
+            });
+            checkInModal.classList.add('hidden');
+        }
+        function calculateNextRecurrence(baseDate, recurrenceType) {
+            let nextDate = new Date(baseDate);
+            switch (recurrenceType) {
+                case 'hourly': nextDate.setHours(nextDate.getHours() + 1); break;
+                case '4-hourly': nextDate.setHours(nextDate.getHours() + 4); break;
+                case 'daily-morning': nextDate.setDate(nextDate.getDate() + 1); nextDate.setHours(8, 0, 0, 0); break;
+                case 'daily-evening': nextDate.setDate(nextDate.getDate() + 1); nextDate.setHours(20, 0, 0, 0); break;
+            }
+            return nextDate;
+        }
+
+        function initializeReminderChecks() {
+            if (!('Notification' in window)) { console.log("Browser does not support notifications."); return; }
+            if (Notification.permission === 'default') { Notification.requestPermission(); }
+            setInterval(() => {
+                checkGlobalReminder();
+            }, 60000);
+        }
+
+        function getGlobalReminder() {
+            const reminderStr = localStorage.getItem(GLOBAL_REMINDER_KEY);
+            return reminderStr ? JSON.parse(reminderStr) : null;
+        }
+        function saveGlobalReminder(settings) {
+            localStorage.setItem(GLOBAL_REMINDER_KEY, JSON.stringify(settings));
+            updateGlobalReminderStatus();
+        }
+        function clearGlobalReminder() {
+            localStorage.removeItem(GLOBAL_REMINDER_KEY);
+            updateGlobalReminderStatus();
+        }
+        function updateGlobalReminderStatus() {
+            const reminder = getGlobalReminder();
+            if (reminder && reminder.nextNotificationTime) {
+                const nextTime = new Date(reminder.nextNotificationTime);
+                globalReminderStatus.textContent = `Next app reminder: ${nextTime.toLocaleString()}`;
+                globalReminderStatus.classList.remove('text-gray-500');
+                globalReminderStatus.classList.add('text-purple-700', 'font-semibold');
+            } else {
+                globalReminderStatus.textContent = 'App reminder is off.';
+                globalReminderStatus.classList.add('text-gray-500');
+                globalReminderStatus.classList.remove('text-purple-700', 'font-semibold');
+            }
+        }
+        function checkGlobalReminder() {
+            if (Notification.permission !== 'granted') return;
+            const reminder = getGlobalReminder();
+            if (!reminder || !reminder.nextNotificationTime) return;
+            const nextTime = new Date(reminder.nextNotificationTime);
+            if (new Date() >= nextTime) {
+                new Notification('To-Do App', { body: 'Time to check your tasks!', icon: 'https://placehold.co/192x192/c084fc/ffffff?text=🔔' });
+                const newNextTime = calculateNextRecurrence(nextTime, reminder.type);
+                saveGlobalReminder({ ...reminder, nextNotificationTime: newNextTime.toISOString() });
+            }
+        }
+        function showGlobalReminderModal() {
+            const body = `<p class="text-gray-600 mb-4">Set a recurring reminder to check your app.</p>
+                <div class="grid grid-cols-2 gap-2 mb-4">
+                    <button class="global-reminder-preset-btn p-2 bg-gray-200 rounded" data-type="hourly">Hourly</button>
+                    <button class="global-reminder-preset-btn p-2 bg-gray-200 rounded" data-type="4-hourly">Every 4 Hrs</button>
+                    <button class="global-reminder-preset-btn p-2 bg-gray-200 rounded" data-type="daily-morning">Morning (8am)</button>
+                    <button class="global-reminder-preset-btn p-2 bg-gray-200 rounded" data-type="daily-evening">Evening (8pm)</button>
+                </div>
+                <input type="datetime-local" id="global-reminder-datetime-input" class="w-full p-2 border rounded">`;
+
+            const setReminder = (type, customTime = null) => {
+                let nextNotificationTime;
+                if (type) {
+                    const now = new Date();
+                    if (type === 'daily-morning' && now.getHours() >= 8) now.setDate(now.getDate() + 1);
+                    if (type === 'daily-evening' && now.getHours() >= 20) now.setDate(now.getDate() + 1);
+                    nextNotificationTime = calculateNextRecurrence(now, type);
+                } else if (customTime && customTime > new Date()) {
+                    nextNotificationTime = customTime;
+                    type = 'custom';
+                } else {
+                    window.showModal("Invalid Time", "<p>Please select a time in the future.</p>", [{ text: 'OK', class: 'px-4 py-2 bg-blue-600 text-white rounded' }]);
+                    return;
+                }
+                saveGlobalReminder({ type, nextNotificationTime: nextNotificationTime.toISOString() });
+                document.getElementById('modal').classList.add('hidden');
+            };
+
+            window.showModal('Set App Reminder', body, [
+                { text: 'Clear Reminder', class: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700', action: clearGlobalReminder },
+                { text: 'Set Custom', class: 'px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700', action: () => {
+                    const datetimeInput = document.getElementById('global-reminder-datetime-input');
+                    setReminder(null, new Date(datetimeInput.value));
+                }},
+                { text: 'Close', class: 'px-4 py-2 bg-gray-300 text-black rounded-lg hover:bg-gray-400' }
+            ]);
+            document.querySelectorAll('.global-reminder-preset-btn').forEach(btn => {
+                btn.onclick = () => setReminder(btn.dataset.type);
+            });
+        }
+
+        // --- EDIT TASK ---
+        function switchToTaskEditMode(taskLi) {
+            const taskTextSpan = taskLi.querySelector('.task-text');
+            const taskActionsDiv = taskLi.querySelector('.task-actions');
+            if (!taskTextSpan || !taskActionsDiv || taskLi.querySelector('.edit-container')) return;
+
+            const currentText = taskTextSpan.textContent;
+            
+            taskTextSpan.style.display = 'none';
+            taskActionsDiv.style.display = 'none';
+
+            const editContainer = document.createElement('div');
+            editContainer.className = 'edit-container flex-grow flex items-center gap-2 ml-3';
+            editContainer.innerHTML = `
+                <input type="text" class="edit-task-input flex-grow p-1 border border-gray-300 rounded" value="">
+                <button class="save-task-btn p-1 bg-green-500 text-white rounded hover:bg-green-600" title="Save">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pointer-events-none"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>
+                <button class="cancel-edit-task-btn p-1 bg-gray-500 text-white rounded hover:bg-gray-600" title="Cancel">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pointer-events-none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            `;
+            
+            taskTextSpan.parentNode.insertBefore(editContainer, taskTextSpan.nextSibling);
+            
+            const input = editContainer.querySelector('.edit-task-input');
+            input.value = currentText;
+            input.focus();
+            input.select();
+
+            const saveChanges = () => {
+                const newText = input.value.trim();
+                if (newText && newText !== currentText) {
+                    const taskId = taskLi.dataset.id;
+                    const type = taskLi.dataset.type;
+                    updateTaskText(type, taskId, newText);
+                } else {
+                    cancelEdit();
+                }
+            };
+
+            const cancelEdit = () => {
+                editContainer.remove();
+                taskTextSpan.style.display = '';
+                taskActionsDiv.style.display = 'flex';
+            };
+
+            editContainer.querySelector('.save-task-btn').addEventListener('click', saveChanges);
+            editContainer.querySelector('.cancel-edit-task-btn').addEventListener('click', cancelEdit);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); saveChanges(); } 
+                else if (e.key === 'Escape') { cancelEdit(); }
+            });
+        }
+        async function switchToStandardTaskEditMode(taskLi) {
+            const taskId = taskLi.dataset.id;
+            const taskType = taskLi.dataset.taskType;
+            if (!taskId || !taskType) return;
+
+            const collectionName = `standard_${taskType}_tasks`;
+            const docRef = doc(db, `/artifacts/${appId}/users/${userId}/${collectionName}/${taskId}`);
+            const docSnap = await getDoc(docRef);
+            if (!docSnap.exists()) return;
+
+            const taskData = docSnap.data();
+            const originalContent = taskLi.innerHTML;
+            taskLi.innerHTML = ''; // Clear the li
+
+            const editForm = document.createElement('div');
+            editForm.className = 'p-2 space-y-2';
+
+            let formHtml = `<input type="text" id="edit-std-text" class="w-full p-1 border rounded" value="${taskData.text}">`;
+
+            if (taskType === 'daily') {
+                formHtml += `
+                    <div class="flex gap-2">
+                        <select id="edit-std-timeofday" class="flex-grow p-1 border rounded">
+                            <option value="morning" ${taskData.timeOfDay === 'morning' ? 'selected' : ''}>Morning</option>
+                            <option value="day" ${taskData.timeOfDay === 'day' ? 'selected' : ''}>Day</option>
+                            <option value="evening" ${taskData.timeOfDay === 'evening' ? 'selected' : ''}>Evening</option>
+                        </select>
+                        <input type="number" id="edit-std-duration" placeholder="min" class="w-20 p-1 border rounded" value="${taskData.duration || ''}">
+                        <input type="number" id="edit-std-rating" min="1" max="5" class="w-20 p-1 border rounded" value="${taskData.rating || 1}">
+                    </div>
+                `;
+            } else if (taskType === 'weekly') {
+                formHtml += `
+                    <div class="grid grid-cols-2 gap-2">
+                        <select id="edit-std-dayofweek" class="p-1 border rounded">
+                            <option value="1" ${taskData.dayOfWeek == '1' ? 'selected' : ''}>Monday</option>
+                            <option value="2" ${taskData.dayOfWeek == '2' ? 'selected' : ''}>Tuesday</option>
+                            <option value="3" ${taskData.dayOfWeek == '3' ? 'selected' : ''}>Wednesday</option>
+                            <option value="4" ${taskData.dayOfWeek == '4' ? 'selected' : ''}>Thursday</option>
+                            <option value="5" ${taskData.dayOfWeek == '5' ? 'selected' : ''}>Friday</option>
+                            <option value="6" ${taskData.dayOfWeek == '6' ? 'selected' : ''}>Saturday</option>
+                            <option value="0" ${taskData.dayOfWeek == '0' ? 'selected' : ''}>Sunday</option>
+                        </select>
+                        <input type="time" id="edit-std-time" class="p-1 border rounded" value="${taskData.time || ''}">
+                        <input type="number" id="edit-std-duration" placeholder="min" class="p-1 border rounded" value="${taskData.duration || ''}">
+                        <input type="number" id="edit-std-rating" min="1" max="5" class="p-1 border rounded" value="${taskData.rating || 1}">
+                    </div>
+                `;
+            }
+
+            formHtml += `
+                <div class="flex justify-end gap-2">
+                    <button id="save-std-edit" class="px-3 py-1 bg-green-500 text-white rounded text-sm">Save</button>
+                    <button id="cancel-std-edit" class="px-3 py-1 bg-gray-500 text-white rounded text-sm">Cancel</button>
+                </div>
+            `;
+            
+            editForm.innerHTML = formHtml;
+            taskLi.appendChild(editForm);
+
+            editForm.querySelector('#cancel-std-edit').addEventListener('click', () => {
+                taskLi.innerHTML = originalContent;
+            });
+
+            editForm.querySelector('#save-std-edit').addEventListener('click', async () => {
+                const newText = editForm.querySelector('#edit-std-text').value.trim();
+                if (!newText) return;
+
+                let newData = { text: newText };
+                let hasChanged = newText !== taskData.text;
+
+                if (taskType === 'daily') {
+                    const newTimeOfDay = editForm.querySelector('#edit-std-timeofday').value;
+                    const newDuration = parseInt(editForm.querySelector('#edit-std-duration').value, 10) || null;
+                    const newRating = parseInt(editForm.querySelector('#edit-std-rating').value, 10) || 1;
+                    
+                    if (newTimeOfDay !== taskData.timeOfDay) hasChanged = true;
+                    if (newDuration !== (taskData.duration || null)) hasChanged = true;
+                    if (newRating !== (taskData.rating || 1)) hasChanged = true;
+
+                    newData = { ...newData, timeOfDay: newTimeOfDay, duration: newDuration, rating: newRating };
+                } else if (taskType === 'weekly') {
+                    const newDayOfWeek = editForm.querySelector('#edit-std-dayofweek').value;
+                    const newTime = editForm.querySelector('#edit-std-time').value;
+                    const newDuration = parseInt(editForm.querySelector('#edit-std-duration').value, 10) || null;
+                    const newRating = parseInt(editForm.querySelector('#edit-std-rating').value, 10) || 1;
+                    
+                    if (newDayOfWeek !== taskData.dayOfWeek) hasChanged = true;
+                    if (newTime !== taskData.time) hasChanged = true;
+                    if (newDuration !== (taskData.duration || null)) hasChanged = true;
+                    if (newRating !== (taskData.rating || 1)) hasChanged = true;
+                    
+                    newData = { ...newData, dayOfWeek: newDayOfWeek, time: newTime, duration: newDuration, rating: newRating };
+                }
+                
+                if (hasChanged) {
+                    await updateDoc(docRef, newData);
+                } else {
+                    taskLi.innerHTML = originalContent;
+                }
+            });
+        }
+        function switchToEditMode(rewardItem) {
+            const detailsDiv = rewardItem.querySelector('.reward-details');
+            const actionsDiv = rewardItem.querySelector('.reward-actions');
+            const currentName = detailsDiv.querySelector('.reward-name').textContent;
+            const currentCost = parseInt(detailsDiv.querySelector('.reward-cost').textContent, 10);
+            const currentIcon = rewardItem.querySelector('.text-6xl').textContent;
+
+            let iconOptions = REWARD_ICONS.map(icon => `<option value="${icon}" ${icon === currentIcon ? 'selected' : ''}>${icon}</option>`).join('');
+
+            detailsDiv.innerHTML = `
+                <select class="edit-reward-icon-select w-full p-1 border rounded text-2xl mb-1">${iconOptions}</select>
+                <input type="text" value="${currentName}" class="edit-reward-name-input w-full p-1 border border-gray-300 rounded text-center text-lg font-bold">
+                <input type="number" value="${currentCost}" class="edit-reward-cost-input w-full p-1 border border-gray-300 rounded mt-1 text-center text-lg font-bold">
+            `;
+
+            actionsDiv.innerHTML = `
+                <button class="save-reward-btn px-3 py-1 bg-green-500 text-white text-sm font-semibold rounded-full hover:bg-green-600">Save</button>
+                <button class="cancel-edit-btn px-3 py-1 bg-gray-500 text-white text-sm font-semibold rounded-full hover:bg-gray-600">Cancel</button>
+            `;
+        }
+        async function saveRewardChanges(rewardItem) {
+            const rewardId = rewardItem.dataset.id;
+            const newName = rewardItem.querySelector('.edit-reward-name-input').value.trim();
+            const newCost = parseInt(rewardItem.querySelector('.edit-reward-cost-input').value, 10);
+            const newIcon = rewardItem.querySelector('.edit-reward-icon-select').value;
+
+            if (!newName || isNaN(newCost) || newCost <= 0) {
+                showModal("Invalid Input", "Please enter a valid name and positive star cost.");
+                return;
+            }
+
+            try {
+                await updateDoc(doc(db, `/artifacts/${appId}/users/${userId}/rewards/${rewardId}`), {
+                    name: newName,
+                    cost: newCost,
+                    icon: newIcon
+                });
+            } catch (e) {
+                console.error("Error updating reward:", e);
+                showModal("Error", "Could not save changes.");
+            }
+        }
+        async function redeemReward(cost) {
+            const settingsRef = doc(db, `/artifacts/${appId}/users/${userId}/settings/main`);
+            const settingsSnap = await getDoc(settingsRef);
+            const currentStars = settingsSnap.exists() ? settingsSnap.data().totalStars : 0;
+            if (currentStars >= cost) {
+                await updateDoc(settingsRef, { totalStars: increment(-cost) });
+                showModal("Success!", "You have redeemed your reward!");
+            } else {
+                showModal("Not Enough Stars", "You need more stars for that one!");
+            }
+        }
+
+
+        // --- DRAG & DROP SORTING ---
+        function initializeSortableLists() {
+            const setupSortable = (listEl, groupName) => {
+                new Sortable(listEl, {
+                    group: groupName, animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost',
+                    onEnd: async (evt) => {
+                        const { to, from, item } = evt;
+                        const taskId = item.dataset.id;
+                        const originalType = item.dataset.type;
+                        if (originalType !== 'daily') return;
+                        
+                        const newTimeOfDay = to.id.split('-')[0];
+                        const taskDocRef = doc(db, `/artifacts/${appId}/users/${userId}/daily_tasks/${taskId}`);
+                        await updateDoc(taskDocRef, { timeOfDay: newTimeOfDay });
+
+                        const updateListOrder = async (list) => {
+                            await Promise.all(Array.from(list.children).map((child, index) => {
+                                const id = child.dataset.id;
+                                if (!id) return Promise.resolve();
+                                return updateDoc(doc(db, `/artifacts/${appId}/users/${userId}/daily_tasks/${id}`), { order: index });
+                            }));
+                        };
+                        await updateListOrder(to);
+                        if (from !== to) await updateListOrder(from);
+                    }
+                });
+            };
+            DAILY_SECTIONS.forEach(section => setupSortable(dailyTaskLists[section], 'daily-tasks'));
+        }
+
+        // --- EVENT LISTENERS ---
+        window.addEventListener('DOMContentLoaded', () => {
+            setupFirebase();
+            manageStandardTasksBtn.addEventListener('click', () => standardTasksModal.classList.remove('hidden'));
+            standardTasksModalCloseBtn.addEventListener('click', () => standardTasksModal.classList.add('hidden'));
+            manageStandardWeeklyTasksBtn.addEventListener('click', () => standardWeeklyTasksModal.classList.remove('hidden'));
+            standardWeeklyTasksModalCloseBtn.addEventListener('click', () => standardWeeklyTasksModal.classList.add('hidden'));
+            openShopBtn.addEventListener('click', () => { mainAppView.classList.add('hidden'); shopView.classList.remove('hidden'); });
+            backToTasksBtn.addEventListener('click', () => { shopView.classList.add('hidden'); mainAppView.classList.remove('hidden'); });
+            setGlobalReminderBtn.addEventListener('click', showGlobalReminderModal);
+            addRewardBtn.addEventListener('click', addReward);
+            saveProgressBtn.addEventListener('click', () => {
+                showModal("Progress Saved", "<p>Your progress is saved automatically in real-time.</p>", [{ text: 'OK', class: 'px-4 py-2 bg-blue-600 text-white rounded' }]);
+            });
+
+            // Check-in modal listeners
+            document.getElementById('smiley-btn').addEventListener('click', () => handleCheckIn('happy'));
+            document.getElementById('indifferent-btn').addEventListener('click', () => handleCheckIn('indifferent'));
+            document.getElementById('sad-btn').addEventListener('click', () => handleCheckIn('sad'));
+
+            addDailyTaskBtn.addEventListener('click', () => addTask('daily'));
+            dailyTaskInput.addEventListener('keypress', (e) => e.key === 'Enter' && addTask('daily'));
+            TASK_TYPES.forEach(type => {
+                addButtons[type].addEventListener('click', () => addTask(type));
+                taskInputs[type].addEventListener('keypress', (e) => e.key === 'Enter' && addTask(type));
+            });
+            addStandardTaskBtn.addEventListener('click', addStandardTask);
+            addStandardWeeklyTaskBtn.addEventListener('click', addStandardWeeklyTask);
+
+            document.body.addEventListener('click', (e) => {
+                const taskLi = e.target.closest('li[data-id]');
+                if (taskLi) {
+                    const taskId = taskLi.dataset.id;
+                    const type = taskLi.dataset.type;
+                    
+                    if (e.target.closest('.delete-standard-task-btn')) { performDelete('standard_daily_tasks', taskId); }
+                    else if (e.target.closest('.delete-standard-weekly-task-btn')) { performDelete('standard_weekly_tasks', taskId); }
+                    else if (e.target.closest('.edit-standard-task-btn')) { switchToStandardTaskEditMode(taskLi); }
+                    else if (e.target.matches('.task-checkbox')) { toggleTaskCompletion(type, taskId, e.target.checked); } 
+                    else if (e.target.closest('.delete-task-btn')) { performDelete(`${type}_tasks`, taskId); } 
+                    else if (e.target.matches('.star')) { updateTaskRating(type, taskId, parseInt(e.target.dataset.value, 10)); }
+                    else if (e.target.closest('.edit-task-btn')) { switchToTaskEditMode(taskLi); }
+                }
+
+                const rewardItem = e.target.closest('.reward-item');
+                if(rewardItem) {
+                    const rewardId = rewardItem.dataset.id;
+                    if (e.target.matches('.edit-reward-btn')) { switchToEditMode(rewardItem); return; }
+                    if (e.target.matches('.save-reward-btn')) { saveRewardChanges(rewardItem); return; }
+                    if (e.target.matches('.cancel-edit-btn')) { listenToRewards(); return; }
+                    if (e.target.matches('.redeem-reward-btn')) { redeemReward(parseInt(e.target.dataset.cost, 10)); return; }
+                    if (e.target.matches('.delete-reward-btn')) {
+                        showModal('Confirm Deletion', 'Are you sure you want to remove this reward?', [
+                            { text: 'Delete', class: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 mr-2', action: () => performDelete('rewards', rewardId) },
+                            { text: 'Cancel', class: 'px-4 py-2 bg-gray-300 text-black rounded-lg hover:bg-gray-400' }
+                        ]);
+                        return;
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
