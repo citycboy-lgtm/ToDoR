@@ -271,6 +271,11 @@
                     </div>
                     <button id="request-permissions-btn" class="w-full mt-4 px-4 py-2 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600">Request Notification Permission</button>
                 </div>
+                 <div class="border-t pt-6">
+                    <h4 class="font-bold text-lg text-indigo-700 mb-2">Firebase Configuration</h4>
+                    <p class="text-sm mb-3">Update the Firebase project configuration used by this app. <strong class="text-red-600">Warning:</strong> Changing this will connect you to a different database.</p>
+                    <button id="change-firebase-config-btn" class="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">Change Configuration</button>
+                </div>
                 <div>
                     <h4 class="font-bold text-lg text-indigo-700 mb-2">Export Data</h4>
                     <p class="text-sm mb-3">Save a backup of all your tasks and rewards to a JSON file.</p>
@@ -285,6 +290,25 @@
             </div>
         </div>
     </div>
+    <!-- Firebase Config Modal -->
+    <div id="firebase-config-modal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-[100] p-4 hidden">
+        <div class="bg-white rounded-lg p-6 shadow-xl max-w-md w-full">
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">Firebase Configuration Required</h3>
+            <p class="text-gray-600 mb-4">To run this app on your own, it needs a <a href="https://firebase.google.com/" target="_blank" class="text-indigo-600 hover:underline">Firebase</a> project to store data.</p>
+            <ol class="list-decimal list-inside text-sm text-left space-y-1 mb-6">
+                <li>Create a new project in the Firebase Console.</li>
+                <li>Add a new Web App (&lt;/&gt;).</li>
+                <li>Copy the `firebaseConfig` object and paste it below.</li>
+                <li>In your Firebase project, go to Firestore Database and create a database.</li>
+            </ol>
+            <textarea id="firebase-config-textarea" rows="8" class="w-full p-2 border rounded font-mono text-xs" placeholder='// Paste the entire firebaseConfig object here&#10;const firebaseConfig = {&#10;  apiKey: "...",&#10;  authDomain: "...",&#10;  // ...&#10;};'></textarea>
+            <div class="mt-4">
+                <button id="save-firebase-config-btn" class="w-full px-4 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">Save and Initialize</button>
+                <p class="text-xs text-gray-500 mt-2">Your configuration is saved in this browser's local storage.</p>
+            </div>
+        </div>
+    </div>
+
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -305,7 +329,6 @@
         // --- GLOBAL STATE AND CONFIG ---
         let db, auth, userId, isAuthReady = false, userSettings = {}, currentRewards = [], audioCtx;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         const TASK_TYPES = ['weekly', 'monthly', 'yearly'];
         const ALL_TASK_COLLECTIONS = ['daily_tasks', 'weekly_tasks', 'monthly_tasks', 'yearly_tasks', 'standard_daily_tasks', 'standard_weekly_tasks', 'standard_monthly_tasks', 'standard_yearly_tasks'];
@@ -361,6 +384,10 @@
         const importDataBtn = document.getElementById('import-data-btn');
         const importFileInput = document.getElementById('import-file-input');
         const requestPermissionsBtn = document.getElementById('request-permissions-btn');
+        const firebaseConfigModal = document.getElementById('firebase-config-modal');
+        const saveFirebaseConfigBtn = document.getElementById('save-firebase-config-btn');
+        const firebaseConfigTextarea = document.getElementById('firebase-config-textarea');
+        const changeFirebaseConfigBtn = document.getElementById('change-firebase-config-btn');
 
         // --- VIEW & MODAL HELPERS ---
         function showModal(title, bodyContent, buttonsConfig) {
@@ -392,10 +419,14 @@
         }
 
         // --- FIREBASE & AUTH ---
-        async function setupFirebase() {
-            if (!firebaseConfig) return;
+        async function setupFirebase(config) {
+            if (!config || !config.apiKey) {
+                console.error("Firebase config is missing or invalid.");
+                document.getElementById('userIdDisplay').textContent = 'Error: Firebase not configured.';
+                return;
+            }
             try {
-                const app = initializeApp(firebaseConfig);
+                const app = initializeApp(config);
                 auth = getAuth(app);
                 db = getFirestore(app);
                 onAuthStateChanged(auth, (user) => {
@@ -410,6 +441,31 @@
                 if (initialAuthToken) { await signInWithCustomToken(auth, initialAuthToken); } 
                 else { await signInAnonymously(auth); }
             } catch (error) { console.error("Firebase setup error:", error); }
+        }
+
+        function loadAndInitializeFirebase() {
+            let config = null;
+            
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                try {
+                    config = JSON.parse(__firebase_config);
+                } catch(e) { console.error("Could not parse injected Firebase config.", e); }
+            }
+            
+            if (!config) {
+                const storedConfig = localStorage.getItem('firebaseConfig');
+                if (storedConfig) {
+                    try {
+                        config = JSON.parse(storedConfig);
+                    } catch (e) { console.error("Could not parse Firebase config from localStorage.", e); }
+                }
+            }
+
+            if (config && config.apiKey) {
+                setupFirebase(config);
+            } else {
+                firebaseConfigModal.classList.remove('hidden');
+            }
         }
 
         // --- DATA & UI INITIALIZATION ---
@@ -1462,7 +1518,7 @@ END:VCALENDAR`;
 
         // --- EVENT LISTENERS ---
         window.addEventListener('DOMContentLoaded', () => {
-            setupFirebase();
+            loadAndInitializeFirebase();
             manageStandardTasksBtn.addEventListener('click', () => standardTasksModal.classList.remove('hidden'));
             standardTasksModalCloseBtn.addEventListener('click', () => standardTasksModal.classList.add('hidden'));
             manageStandardWeeklyTasksBtn.addEventListener('click', () => standardWeeklyTasksModal.classList.remove('hidden'));
@@ -1485,6 +1541,41 @@ END:VCALENDAR`;
             requestPermissionsBtn.addEventListener('click', () => {
                 if ('Notification' in window) { Notification.requestPermission(); }
             });
+
+            changeFirebaseConfigBtn.addEventListener('click', () => {
+                settingsModal.classList.add('hidden');
+                const currentConfig = localStorage.getItem('firebaseConfig');
+                if (currentConfig) {
+                    firebaseConfigTextarea.value = JSON.stringify(JSON.parse(currentConfig), null, 2);
+                } else {
+                    firebaseConfigTextarea.value = '';
+                }
+                firebaseConfigModal.classList.remove('hidden');
+            });
+
+            saveFirebaseConfigBtn.addEventListener('click', () => {
+                let configString = firebaseConfigTextarea.value.trim();
+                if (configString.includes('=')) {
+                    configString = configString.substring(configString.indexOf('{'));
+                }
+                if (configString.endsWith(';')) {
+                    configString = configString.slice(0, -1);
+                }
+
+                try {
+                    const config = JSON.parse(configString);
+                    if (!config.apiKey || !config.projectId) {
+                        throw new Error("Missing apiKey or projectId in the configuration.");
+                    }
+                    localStorage.setItem('firebaseConfig', JSON.stringify(config));
+                    firebaseConfigModal.classList.add('hidden');
+                    setupFirebase(config);
+                } catch (e) {
+                    console.error("Invalid Firebase config provided:", e);
+                    showModal("Invalid Configuration", "<p>The text you pasted doesn't seem to be a valid Firebase config object. Please copy it again from your Firebase project settings.</p>", [{ text: 'OK', class: 'px-4 py-2 bg-blue-600 text-white rounded' }]);
+                }
+            });
+
 
             // Check-in modal listeners
             document.getElementById('smiley-btn').addEventListener('click', () => handleCheckIn('happy'));
@@ -1547,3 +1638,4 @@ END:VCALENDAR`;
     </script>
 </body>
 </html>
+
