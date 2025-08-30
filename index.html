@@ -440,7 +440,19 @@
                 });
                 if (initialAuthToken) { await signInWithCustomToken(auth, initialAuthToken); } 
                 else { await signInAnonymously(auth); }
-            } catch (error) { console.error("Firebase setup error:", error); }
+            } catch (error) { 
+                console.error("Firebase setup error:", error); 
+                document.getElementById('userIdDisplay').textContent = 'Authentication Failed. Please provide a valid Firebase configuration.';
+                localStorage.removeItem('firebaseConfig'); // Clear the bad config
+                firebaseConfigModal.classList.remove('hidden'); // Show the modal again
+                // Add an error message to the modal
+                const errorP = document.createElement('p');
+                errorP.textContent = `Error: ${error.message}. Please double-check your config object.`;
+                errorP.className = 'text-red-500 text-xs mt-2';
+                const existingError = firebaseConfigModal.querySelector('.text-red-500');
+                if(existingError) existingError.remove();
+                saveFirebaseConfigBtn.insertAdjacentElement('afterend', errorP);
+            }
         }
 
         function loadAndInitializeFirebase() {
@@ -464,6 +476,7 @@
             if (config && config.apiKey) {
                 setupFirebase(config);
             } else {
+                document.getElementById('userIdDisplay').textContent = 'Waiting for Firebase Configuration...';
                 firebaseConfigModal.classList.remove('hidden');
             }
         }
@@ -1638,4 +1651,5 @@ END:VCALENDAR`;
     </script>
 </body>
 </html>
+
 
