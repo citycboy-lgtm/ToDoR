@@ -297,12 +297,19 @@
                 <h3 class="text-2xl font-bold text-gray-800">Firebase Configuration Required</h3>
                 <button id="firebase-config-modal-close-btn" class="text-gray-500 hover:text-gray-800 text-3xl font-bold leading-none">&times;</button>
             </div>
-            <p class="text-gray-600 mb-4">To run this app on your own, it needs a <a href="https://console.firebase.google.com/" target="_blank" class="text-indigo-600 hover:underline">Firebase Console</a> project to store data.</p>
-            <ol class="list-decimal list-inside text-sm text-left space-y-1 mb-6">
-                <li>Create a new project in the Firebase Console.</li>
-                <li>Add a new Web App (&lt;/&gt;).</li>
-                <li>Copy the `firebaseConfig` object and paste it below.</li>
-                <li>In your Firebase project, go to Firestore Database and create a database.</li>
+            <p class="text-gray-600 mb-4">To get this app running, you'll need to connect it to a free Firebase project for data storage. Follow these steps:</p>
+            <ol class="list-decimal list-inside text-sm text-left space-y-2 mb-6">
+                <li><strong>Create Project:</strong> Go to the <a href="https://console.firebase.google.com/" target="_blank" class="text-indigo-600 hover:underline font-semibold">Firebase Console</a> and create a new project.</li>
+                <li><strong>Add Web App:</strong> On your project's main dashboard, click the Web icon <strong>(&lt;/&gt;)</strong> to add a new web application.</li>
+                <li><strong>Copy Config:</strong> After registering your web app, Firebase will show you a `firebaseConfig` code block. Copy the entire block of code, starting from `const firebaseConfig = {` and ending with `};`. The app will automatically find the part it needs.</li>
+                <li><strong>Create Database (Final Step):</strong>
+                    <ul class="list-disc list-inside ml-4 mt-1 space-y-1 text-gray-500">
+                        <li>In the Firebase menu (left side), click <strong>Build > Firestore Database</strong>.</li>
+                        <li>Click the large <strong>"Create database"</strong> button.</li>
+                        <li>Select <strong>"Start in production mode"</strong> and click Next.</li>
+                        <li>Choose a location for your database (the default is fine) and click <strong>"Enable"</strong>.</li>
+                    </ul>
+                </li>
             </ol>
             <textarea id="firebase-config-textarea" rows="8" class="w-full p-2 border rounded font-mono text-xs" placeholder='// Paste the entire firebaseConfig object here&#10;const firebaseConfig = {&#10;  apiKey: "...",&#10;  authDomain: "...",&#10;  // ...&#10;};'></textarea>
             <div class="mt-4">
@@ -1575,25 +1582,37 @@ END:VCALENDAR`;
             });
 
             saveFirebaseConfigBtn.addEventListener('click', () => {
-                let configString = firebaseConfigTextarea.value.trim();
-                if (configString.includes('=')) {
-                    configString = configString.substring(configString.indexOf('{'));
-                }
-                if (configString.endsWith(';')) {
-                    configString = configString.slice(0, -1);
+                const pastedText = firebaseConfigTextarea.value;
+                
+                // Regex to find a JSON-like object that starts with { and contains apiKey.
+                // This is robust enough to find the object even if the user pastes the whole script or variable declaration.
+                const match = pastedText.match(/({[\s\S]*apiKey[\s\S]*})/);
+                
+                if (!match || match.length < 2) {
+                    showModal("Invalid Configuration", "<p>Could not find a valid Firebase config object in the text you pasted. Please make sure you copy the entire `firebaseConfig` block from your Firebase project settings.</p>", [{ text: 'OK', class: 'px-4 py-2 bg-blue-600 text-white rounded' }]);
+                    return;
                 }
 
+                let configString = match[1];
+
+                // Attempt to parse the found string.
                 try {
-                    const config = JSON.parse(configString);
+                    // Using the Function constructor is a safer way to parse a JavaScript object literal
+                    // that might not be strict JSON (e.g., has trailing commas). It's safer than eval().
+                    const config = new Function(`return ${configString}`)();
+
                     if (!config.apiKey || !config.projectId) {
-                        throw new Error("Missing apiKey or projectId in the configuration.");
+                        throw new Error("The found object is missing essential keys like apiKey or projectId.");
                     }
+                    
                     localStorage.setItem('firebaseConfig', JSON.stringify(config));
-                    firebaseConfigModal.classList.add('hidden');
-                    setupFirebase(config);
+                    
+                    // Show a success message and then reload the page to ensure a clean re-initialization.
+                    showModal("Success!", "<p>Configuration saved. The app will now reload to connect to your database.</p>", [{ text: 'Reload', class: 'px-4 py-2 bg-blue-600 text-white rounded', action: () => window.location.reload() }]);
+                    
                 } catch (e) {
                     console.error("Invalid Firebase config provided:", e);
-                    showModal("Invalid Configuration", "<p>The text you pasted doesn't seem to be a valid Firebase config object. Please copy it again from your Firebase project settings.</p>", [{ text: 'OK', class: 'px-4 py-2 bg-blue-600 text-white rounded' }]);
+                    showModal("Invalid Configuration", `<p>The configuration you pasted appears to be malformed. Please try copying it again. The error was: ${e.message}</p>`, [{ text: 'OK', class: 'px-4 py-2 bg-blue-600 text-white rounded' }]);
                 }
             });
 
@@ -1659,5 +1678,7 @@ END:VCALENDAR`;
     </script>
 </body>
 </html>
+
+
 
 
