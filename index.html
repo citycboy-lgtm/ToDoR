@@ -1584,35 +1584,42 @@ END:VCALENDAR`;
             saveFirebaseConfigBtn.addEventListener('click', () => {
                 const pastedText = firebaseConfigTextarea.value;
                 
-                // Regex to find a JSON-like object that starts with { and contains apiKey.
-                // This is robust enough to find the object even if the user pastes the whole script or variable declaration.
-                const match = pastedText.match(/({[\s\S]*apiKey[\s\S]*})/);
-                
-                if (!match || match.length < 2) {
-                    showModal("Invalid Configuration", "<p>Could not find a valid Firebase config object in the text you pasted. Please make sure you copy the entire `firebaseConfig` block from your Firebase project settings.</p>", [{ text: 'OK', class: 'px-4 py-2 bg-blue-600 text-white rounded' }]);
+                // Find the start and end of the configuration object.
+                const startIndex = pastedText.indexOf('{');
+                const endIndex = pastedText.lastIndexOf('}');
+
+                if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+                    showModal("Invalid Configuration", "<p>Could not find a valid configuration object (starting with `{` and ending with `}`). Please copy the entire `firebaseConfig` code block from Firebase.</p>", [{ text: 'OK', class: 'px-4 py-2 bg-blue-600 text-white rounded' }]);
                     return;
                 }
 
-                let configString = match[1];
+                // Extract the object string.
+                const configString = pastedText.substring(startIndex, endIndex + 1);
+                let config;
 
-                // Attempt to parse the found string.
+                // Try parsing the object. Use the more lenient Function constructor
+                // as the Firebase config is a JS object, not strict JSON.
                 try {
-                    // Using the Function constructor is a safer way to parse a JavaScript object literal
-                    // that might not be strict JSON (e.g., has trailing commas). It's safer than eval().
-                    const config = new Function(`return ${configString}`)();
+                    config = new Function(`return ${configString}`)();
 
-                    if (!config.apiKey || !config.projectId) {
-                        throw new Error("The found object is missing essential keys like apiKey or projectId.");
+                    if (typeof config !== 'object' || config === null || !config.apiKey || !config.projectId) {
+                        throw new Error("The configuration object is missing required keys like 'apiKey' or 'projectId'.");
                     }
-                    
+
+                    // It worked! Save and reload.
                     localStorage.setItem('firebaseConfig', JSON.stringify(config));
-                    
-                    // Show a success message and then reload the page to ensure a clean re-initialization.
-                    showModal("Success!", "<p>Configuration saved. The app will now reload to connect to your database.</p>", [{ text: 'Reload', class: 'px-4 py-2 bg-blue-600 text-white rounded', action: () => window.location.reload() }]);
-                    
+                    showModal("Success!", "<p>Configuration saved successfully. The app will now reload to connect to your database.</p>", [{
+                        text: 'Reload Now',
+                        class: 'px-4 py-2 bg-blue-600 text-white rounded',
+                        action: () => window.location.reload()
+                    }]);
+
                 } catch (e) {
-                    console.error("Invalid Firebase config provided:", e);
-                    showModal("Invalid Configuration", `<p>The configuration you pasted appears to be malformed. Please try copying it again. The error was: ${e.message}</p>`, [{ text: 'OK', class: 'px-4 py-2 bg-blue-600 text-white rounded' }]);
+                    console.error("Firebase Config Parse Error:", e);
+                    showModal("Invalid Configuration", `<p>The configuration you pasted could not be read. Please make sure you have copied it correctly. <br><br><small class='text-gray-500'>Error: ${e.message}</small></p>`, [{
+                        text: 'Try Again',
+                        class: 'px-4 py-2 bg-blue-600 text-white rounded'
+                    }]);
                 }
             });
 
@@ -1678,7 +1685,4 @@ END:VCALENDAR`;
     </script>
 </body>
 </html>
-
-
-
 
